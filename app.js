@@ -7,7 +7,9 @@
   const MIN_N = 1;
   const MAX_N = 10;
   const HUES = [0, 26, 44, 92, 158, 188, 212, 248, 282, 322];
-  const ROLE_TEXT = { from: 'from', to: 'to', via: 'spare' };
+  const ROLE_TEXT = { from: 'source', to: 'destination', via: 'auxiliary' };
+  const ROLE_CLASS = { source: 'r-from', auxiliary: 'r-via', destination: 'r-to' };
+  const R = (role, text) => `<span class="${ROLE_CLASS[role]}">${text}</span>`;
 
   const motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
   const reducedMotion = () => !!(motionQuery && motionQuery.matches);
@@ -31,7 +33,9 @@
   const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
   const last = (arr) => arr[arr.length - 1];
   const disksUpTo = (m) => (m === 1 ? 'disk 1' : `disks 1–${m}`);
-  const sig = (k, f, t, v) => `hanoi(${k}, ${PEG[f]}, ${PEG[t]}, ${PEG[v]})`;
+  // Internally a call is (n, from, to, via). It is displayed in the order
+  // solve(n, source, auxiliary, destination) = solve(n, from, via, to).
+  const sig = (k, f, t, v) => `solve(${k}, ${PEG[f]}, ${PEG[v]}, ${PEG[t]})`;
   const csig = (k, f, t, v) => `<code>${sig(k, f, t, v)}</code>`;
   const diskColor = (d) => `hsl(${HUES[(d - 1) % HUES.length]} 72% 60%)`;
   function shortenTerms(arr) {
@@ -67,45 +71,52 @@
     }
 
     function hanoi(k, from, to, via, parent) {
-      const node = { id: nodes.length, n: k, from, to, via, parent, depth: stack.length, moveIndex: 0, callStep: steps.length, moveStep: 0, retStep: 0 };
+      const node = { id: nodes.length, n: k, from, to, via, parent, depth: stack.length, children: [], moveIndex: 0, callStep: steps.length, moveStep: 0, retStep: 0 };
       nodes.push(node);
+      if (parent >= 0) nodes[parent].children.push(node.id);
       const frame = { id: node.id, n: k, from, to, via, phase: 'enter' };
       stack.push(frame);
-      const F = PEG[from], T = PEG[to], V = PEG[via];
+      const S = PEG[from], D = PEG[to], X = PEG[via];
+      const p = parent >= 0 ? nodes[parent] : null;
+      const back = p ? `Return to the caller, ${csig(p.n, p.from, p.to, p.via)}.` : 'This was the top-level call, so the whole puzzle is solved.';
 
-      snap(1, `Call ${csig(k, from, to, via)}: move ${k === 1 ? 'disk 1' : disksUpTo(k)} from ${F} to ${T}, with ${V} as the spare peg.`);
-
-      if (k === 1) {
-        frame.phase = 'base';
-        moveDisk(from, to);
-        node.moveIndex = moves;
-        node.moveStep = steps.length;
-        snap(3, `Base case: <i>n</i> is 1, so there is nothing left to split up. Just move disk 1 from ${F} to ${T}. <b>(move #${moves})</b>`, { disk: 1, from, to });
-      } else {
-        frame.phase = 'step1';
-        snap(6, `Step 1: disk ${k} is buried under ${disksUpTo(k - 1)}. Move them out of the way, from ${F} to the spare ${V}. That is the same puzzle with one disk fewer, so call ${csig(k - 1, from, via, to)}.`);
-        hanoi(k - 1, from, via, to, node.id);
-
-        frame.phase = 'step2';
-        moveDisk(from, to);
-        node.moveIndex = moves;
-        node.moveStep = steps.length;
-        snap(7, `Step 2, back in ${csig(k, from, to, via)}: disk ${k} is uncovered and ${T} has no smaller disk on it, so move disk ${k} from ${F} to ${T}. <b>(move #${moves})</b>`, { disk: k, from, to });
-
-        frame.phase = 'step3';
-        snap(8, `Step 3: put ${disksUpTo(k - 1)} back on top of disk ${k}, moving them from ${V} to ${T}. The same smaller puzzle again, so call ${csig(k - 1, via, to, from)}.`);
-        hanoi(k - 1, via, to, from, node.id);
+      if (k === 0) {
+        frame.phase = 'zero';
+        node.retStep = steps.length;
+        snap(2, `Call ${csig(0, from, to, via)}: <i>n</i> is 0, so there are no disks to move. Base case: return right away. ${back}`);
+        stack.pop();
+        return;
       }
+
+      snap(1, `Call ${csig(k, from, to, via)}, so here source = ${S}, auxiliary = ${X}, destination = ${D}. Job: move ${disksUpTo(k)} from ${S} to ${D}, using ${X} as the helper.`);
+
+      frame.phase = 'step1';
+      snap(3, (k === 1
+        ? 'Step 1: there are no smaller disks above disk 1, so this call moves nothing'
+        : `Step 1: disk ${k} is buried under ${disksUpTo(k - 1)}. Move ${k === 2 ? 'it' : 'them'} from the source ${S} to the auxiliary ${X}`) +
+        `. solve(n−1, source, destination, auxiliary) becomes ${csig(k - 1, from, via, to)}: destination and auxiliary swap places.`);
+      hanoi(k - 1, from, via, to, node.id);
+
+      frame.phase = 'step2';
+      moveDisk(from, to);
+      node.moveIndex = moves;
+      node.moveStep = steps.length;
+      snap(4, `Step 2, back in ${csig(k, from, to, via)}: disk ${k} is uncovered and ${D} has no smaller disk on it, so move disk ${k} from the source ${S} to the destination ${D}. <b>(move #${moves})</b>`, { disk: k, from, to });
+
+      frame.phase = 'step3';
+      snap(5, (k === 1
+        ? 'Step 3: again there are no smaller disks to bring over'
+        : `Step 3: put ${disksUpTo(k - 1)} back on top of disk ${k}, moving ${k === 2 ? 'it' : 'them'} from the auxiliary ${X} to the destination ${D}`) +
+        `. solve(n−1, auxiliary, source, destination) becomes ${csig(k - 1, via, to, from)}: source and auxiliary swap places.`);
+      hanoi(k - 1, via, to, from, node.id);
 
       frame.phase = 'done';
       node.retStep = steps.length;
-      const p = parent >= 0 ? nodes[parent] : null;
-      snap(k === 1 ? 4 : 9, `${csig(k, from, to, via)} is finished: ${k === 1 ? 'disk 1 is' : disksUpTo(k) + ' are'} on ${T}. ` +
-        (p ? `Return to the caller, ${csig(p.n, p.from, p.to, p.via)}.` : 'This was the top-level call, so the whole puzzle is solved.'));
+      snap(6, `${csig(k, from, to, via)} is finished: ${k === 1 ? 'disk 1 is' : disksUpTo(k) + ' are'} on ${D}. ${back}`);
       stack.pop();
     }
 
-    snap(0, `Ready to run ${csig(n, 0, 2, 1)}: move ${n === 1 ? 'disk 1' : `all ${n} disks`} from A to C, using B as the spare. Press <b>Play</b> or <b>Next</b>.`);
+    snap(0, `Ready to run ${csig(n, 0, 2, 1)}: source = A, auxiliary = B, destination = C. Move ${n === 1 ? 'disk 1' : `all ${n} disks`} from A to C. Press <b>Play</b> or <b>Next</b>.`);
     hanoi(n, 0, 2, 1, -1);
     snap(0, `Done! ${n === 1 ? '1 disk' : `${n} disks`} moved from A to C in ${fmt(moves)} moves: exactly 2<sup>${n}</sup> − 1 = ${fmt(pow2(n) - 1)}.`);
     return { n, steps, nodes, total: moves };
@@ -159,6 +170,8 @@
   const callDetail = $('#call-detail');
   const frameInfo = $('#frame-info');
   const stackEl = $('#stack');
+  const execEl = $('#exec');
+  const execCard = $('#exec-card');
   const treeWrap = $('#tree-wrap');
   const treeSvg = $('#tree');
   const tallyEq = $('#tally-eq');
@@ -292,23 +305,21 @@
   // Watch mode
   // ===========================================================================
   const CODE = [
-    ['function hanoi(n, from, to, via) {'],
-    ['  if (n === 1) {', 'base case'],
-    ['    move(1, from, to);'],
-    ['    return;'],
-    ['  }'],
-    ['  hanoi(n - 1, from, via, to);', 'step 1'],
-    ['  move(n, from, to);', 'step 2'],
-    ['  hanoi(n - 1, via, to, from);', 'step 3'],
+    ['function solve(n, source, auxiliary, destination) {'],
+    ['  if (n === 0) return;', 'base case'],
+    ['  solve(n - 1, source, destination, auxiliary);', 'step 1'],
+    ['  move(n, source, destination);', 'step 2'],
+    ['  solve(n - 1, auxiliary, source, destination);', 'step 3'],
     ['}'],
-  ].map(([c, cm]) => (cm ? c.padEnd(31) + '// ' + cm : c));
+  ].map(([c, cm]) => (cm ? c.padEnd(48) + '// ' + cm : c));
 
   function highlight(src) {
     const esc = src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return esc.replace(/(\/\/.*$)|\b(function|if|return)\b|\b(hanoi|move)\b|\b(\d+)\b/g, (m, com, kw, fn, num) => {
+    return esc.replace(/(\/\/.*$)|\b(function|if|return)\b|\b(solve|move)\b|\b(source|auxiliary|destination)\b|\b(\d+)\b/g, (m, com, kw, fn, role, num) => {
       if (com) return `<span class="t-com">${com}</span>`;
       if (kw) return `<span class="t-kw">${kw}</span>`;
       if (fn) return `<span class="t-fn">${fn}</span>`;
+      if (role) return `<span class="${ROLE_CLASS[role]}">${role}</span>`;
       if (num) return `<span class="t-num">${num}</span>`;
       return m;
     });
@@ -345,6 +356,7 @@
     frameInfo.textContent = top ? `depth ${st.stack.length - 1}` : '';
     renderCallDetail(top);
     renderStack(st);
+    updateExec(st);
     updateTree(st);
     updateTally(st.moves);
     updateDiskCounts(st.moves);
@@ -364,25 +376,36 @@
       return;
     }
     const k = top.n, F = top.from, T = top.to, V = top.via;
+    const S = R('source', PEG[F]), X = R('auxiliary', PEG[V]), D = R('destination', PEG[T]);
     const head = el('div', 'cd-head');
-    head.innerHTML = `The running call with its values plugged in: ${csig(k, F, T, V)}`;
+    head.innerHTML = `Running call: <code>solve(${k}, ${S}, ${X}, ${D})</code>`;
     callDetail.appendChild(head);
 
-    let items;
-    if (k === 1) {
-      items = [{ label: 'base', html: `move disk 1: ${PEG[F]} → ${PEG[T]}`, state: top.phase === 'base' ? 'now' : top.phase === 'done' ? 'done' : '' }];
-    } else {
-      const p = ['enter', 'step1', 'step2', 'step3', 'done'].indexOf(top.phase);
-      items = [
-        { label: 'step 1', html: `<code>${sig(k - 1, F, V, T)}</code>`, sub: `${disksUpTo(k - 1)}: ${PEG[F]} → ${PEG[V]}`, i: 1 },
-        { label: 'step 2', html: `move disk ${k}: ${PEG[F]} → ${PEG[T]}`, i: 2 },
-        { label: 'step 3', html: `<code>${sig(k - 1, V, T, F)}</code>`, sub: `${disksUpTo(k - 1)}: ${PEG[V]} → ${PEG[T]}`, i: 3 },
-      ].map((it) => Object.assign(it, { state: p > it.i ? 'done' : p === it.i ? 'now' : '' }));
+    const assign = el('div', 'assign');
+    assign.innerHTML =
+      `<span class="chip c-from">source = ${PEG[F]}</span>` +
+      `<span class="chip c-via">auxiliary = ${PEG[V]}</span>` +
+      `<span class="chip c-to">destination = ${PEG[T]}</span>`;
+    callDetail.appendChild(assign);
+
+    if (k === 0) {
+      callDetail.appendChild(el('p', 'muted', 'n is 0, so the base case returns immediately: nothing to move.'));
+      return;
     }
+
+    const src = R('source', 'source'), aux = R('auxiliary', 'auxiliary'), dst = R('destination', 'destination');
+    const p = ['enter', 'step1', 'step2', 'step3', 'done'].indexOf(top.phase);
+    const items = [
+      { label: 'step 1', generic: `solve(n−1, ${src}, ${dst}, ${aux})`, real: `solve(${k - 1}, ${S}, ${D}, ${X})`, sub: k > 1 ? `${disksUpTo(k - 1)}: ${PEG[F]} → ${PEG[V]}` : 'n−1 = 0: nothing to move', i: 1 },
+      { label: 'step 2', generic: `move(n, ${src}, ${dst})`, real: `move disk ${k}: ${S} → ${D}`, i: 2 },
+      { label: 'step 3', generic: `solve(n−1, ${aux}, ${src}, ${dst})`, real: `solve(${k - 1}, ${X}, ${S}, ${D})`, sub: k > 1 ? `${disksUpTo(k - 1)}: ${PEG[V]} → ${PEG[T]}` : 'n−1 = 0: nothing to move', i: 3 },
+    ];
     const list = el('ol', 'cd-list');
     items.forEach((it) => {
-      const li = el('li', 'cd-item' + (it.state ? ' ' + it.state : ''));
-      li.innerHTML = `<span class="cd-lbl">${it.label}</span><span>${it.html}</span>` + (it.sub ? `<span class="cd-sub">${it.sub}</span>` : '');
+      const state = p > it.i ? 'done' : p === it.i ? 'now' : '';
+      const li = el('li', 'cd-item' + (state ? ' ' + state : ''));
+      li.innerHTML = `<span class="cd-lbl">${it.label}</span><code class="cd-gen">${it.generic}</code>` +
+        `<code class="cd-real">→ ${it.real}</code>` + (it.sub ? `<span class="cd-sub">${it.sub}</span>` : '');
       list.appendChild(li);
     });
     callDetail.appendChild(list);
@@ -392,13 +415,94 @@
     const k = f.n, F = f.from, T = f.to, V = f.via;
     switch (f.phase) {
       case 'enter': return 'just called';
-      case 'base': return 'base case: moving disk 1';
+      case 'zero': return 'n = 0: base case, returning right away';
       case 'step1': return (isTop ? 'step 1: about to call ' : 'step 1: waiting for ') + sig(k - 1, F, V, T);
       case 'step2': return `step 2: moving disk ${k}`;
       case 'step3': return (isTop ? 'step 3: about to call ' : 'step 3: waiting for ') + sig(k - 1, V, T, F);
       case 'done': return 'finished, returning';
     }
     return '';
+  }
+
+  // ---------- complete execution tree (text) ----------
+  let exec = null;
+  function buildExec() {
+    const t = app.trace, nodes = t.nodes, lastStep = t.steps.length - 1;
+    const lines = [];
+    const nodeLine = [];
+    const add = (prefix, html, step, nodeId) => {
+      if (nodeId != null) nodeLine[nodeId] = lines.length;
+      lines.push({ prefix, html, step });
+    };
+    const root = nodes[0];
+    add('', sig(root.n, root.from, root.to, root.via), root.callStep, root.id);
+    (function walk(nd, prefix, isRoot) {
+      const [c1, c3] = nd.children.map((id) => nodes[id]);
+      const items = [
+        { kind: 'call', label: 'Step 1', node: c1 },
+        { kind: 'move' },
+        { kind: 'call', label: 'Step 3', node: c3 },
+      ];
+      if (isRoot) items.push({ kind: 'fin' });
+      items.forEach((it, idx) => {
+        const end = idx === items.length - 1;
+        const conn = prefix + (end ? '└── ' : '├── ');
+        const deeper = prefix + (end ? '    ' : '│   ');
+        if (it.kind === 'move') {
+          add(conn, `Step 2: Move disk ${nd.n} (${PEG[nd.from]} → ${PEG[nd.to]}) <span class="mvn">${nd.moveIndex}</span>`, nd.moveStep);
+        } else if (it.kind === 'fin') {
+          add(conn, 'Finished!', lastStep);
+        } else if (it.node.n === 0) {
+          add(conn, `${it.label}: solve(0) → return`, it.node.callStep, it.node.id);
+        } else {
+          add(conn, `${it.label}: ${sig(it.node.n, it.node.from, it.node.to, it.node.via)}`, it.node.callStep, it.node.id);
+          walk(it.node, deeper, false);
+        }
+      });
+    })(root, '', true);
+
+    execEl.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    const els = lines.map((ln, i) => {
+      const row = el('div', 'xl');
+      row.dataset.i = i;
+      row.innerHTML = `<span class="xp">${ln.prefix}</span>${ln.html}`;
+      frag.appendChild(row);
+      return row;
+    });
+    execEl.appendChild(frag);
+
+    // For each step, the last line whose step is at or before it.
+    const lineFor = new Array(t.steps.length).fill(-1);
+    let j = -1;
+    for (let s = 0; s < t.steps.length; s++) {
+      while (j + 1 < lines.length && lines[j + 1].step <= s) j++;
+      lineFor[s] = j;
+    }
+    exec = { lines, els, nodeLine, lineFor, cur: -1, stackLines: [] };
+  }
+
+  function updateExec(st) {
+    if (!exec) return;
+    const target = exec.lineFor[app.step];
+    const prev = exec.cur;
+    if (prev !== target) {
+      const lo = Math.min(prev, target), hi = Math.max(prev, target);
+      for (let i = Math.max(lo, 0); i <= hi; i++) exec.els[i].classList.toggle('done', i <= target);
+      if (prev >= 0) exec.els[prev].classList.remove('cur');
+      if (target >= 0) exec.els[target].classList.add('cur');
+      exec.cur = target;
+    }
+    exec.stackLines.forEach((i) => exec.els[i].classList.remove('onstack'));
+    exec.stackLines = st.stack.map((f) => exec.nodeLine[f.id]).filter((i) => i != null && i !== target);
+    exec.stackLines.forEach((i) => exec.els[i].classList.add('onstack'));
+    if (target >= 0 && !execCard.hidden) {
+      const row = exec.els[target];
+      const top = row.offsetTop;
+      if (top < execEl.scrollTop + 20 || top > execEl.scrollTop + execEl.clientHeight - 40) {
+        execEl.scrollTop = top - execEl.clientHeight / 2;
+      }
+    }
   }
 
   function renderStack(st) {
@@ -495,6 +599,7 @@
     const edgeEls = [];
 
     t.nodes.forEach((nd, i) => {
+      if (nd.n === 0) return;
       if (nd.parent >= 0) {
         const a = pos[nd.parent], b = pos[i];
         const y1 = a.y + half, y2 = b.y - half, ym = (y1 + y2) / 2;
@@ -548,6 +653,7 @@
     const topId = st.stack.length ? last(st.stack).id : -1;
     const onStack = new Set(st.stack.map((f) => f.id));
     for (let i = 0; i < nodes.length; i++) {
+      if (!tree.nodeEls[i]) continue;
       const c = i === topId ? 'cur' : onStack.has(i) ? 'wait' : s > nodes[i].retStep ? 'done' : 'todo';
       if (tree.cls[i] !== c) {
         tree.cls[i] = c;
@@ -601,9 +707,9 @@
     tps[0].label.textContent = `Step 1 · ${fmt(a)} / ${fmt(half)}`;
     tps[1].label.textContent = `disk ${n}`;
     tps[2].label.textContent = `Step 3 · ${fmt(c)} / ${fmt(half)}`;
-    tps[0].box.title = `Step 1: hanoi(${n - 1}, A, B, C) takes T(${n - 1}) = ${fmt(half)} moves`;
+    tps[0].box.title = `Step 1: solve(${n - 1}, A, C, B) takes T(${n - 1}) = ${fmt(half)} moves`;
     tps[1].box.title = `Step 2: move disk ${n} from A to C, 1 move`;
-    tps[2].box.title = `Step 3: hanoi(${n - 1}, B, C, A) takes T(${n - 1}) = ${fmt(half)} moves`;
+    tps[2].box.title = `Step 3: solve(${n - 1}, B, A, C) takes T(${n - 1}) = ${fmt(half)} moves`;
   }
 
   let dcRows = [];
@@ -943,6 +1049,7 @@
     watchControls.hidden = !watch;
     codeCard.hidden = !watch;
     stackCard.hidden = !watch;
+    execCard.hidden = !watch;
     treeCard.hidden = !watch;
     stageNote.hidden = !watch;
     playControls.hidden = watch;
@@ -977,6 +1084,7 @@
     layoutStatic();
     newPlay();
     buildTree();
+    buildExec();
     setupTally();
     buildDiskCounts();
     renderUnroll();
@@ -1011,6 +1119,12 @@
   btnHint.addEventListener('click', hint);
   btnRestart.addEventListener('click', () => { newPlay(); clearBoardMarks(); renderPlay(false); introPlay(); });
 
+  execEl.addEventListener('click', (e) => {
+    const row = e.target.closest && e.target.closest('.xl');
+    if (!row || !exec) return;
+    setPlaying(false);
+    goTo(exec.lines[+row.dataset.i].step, true);
+  });
   treeSvg.addEventListener('click', (e) => {
     const g = e.target.closest && e.target.closest('.tnode');
     if (g) jumpToNode(+g.getAttribute('data-id'));

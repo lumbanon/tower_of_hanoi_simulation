@@ -48,7 +48,7 @@
             <div class="peg-label" data-peg="2"><span class="name">C</span><span class="role"></span></div>
           </div>
           <p id="narration" class="narration" aria-live="polite"></p>
-          <p id="stage-note" class="stage-note">The labels under the pegs show the <em>current call's</em> roles: <b class="c-from">from</b>, <b class="c-to">to</b> and <b class="c-via">spare</b>. They swap around in every recursive call. Faded disks are bigger than the current call's <i>n</i>: that call never touches them, so they act like part of the floor.</p>
+          <p id="stage-note" class="stage-note">The labels under the pegs show the <em>current call's</em> roles: <b class="c-from">source</b>, <b class="c-via">auxiliary</b> and <b class="c-to">destination</b>. They are re-assigned in every recursive call. Faded disks are bigger than the current call's <i>n</i>: that call never touches them, so they act like part of the floor.</p>
         </section>
 
         <section id="watch-controls" class="card controls">
@@ -122,11 +122,16 @@
           <ol id="stack" class="stack"></ol>
         </section>
 
+        <section class="card" id="exec-card">
+          <div class="card-head"><h2>Complete execution tree</h2><span class="muted small">click a line to jump there</span></div>
+          <div id="exec" class="exec"></div>
+        </section>
+
         <section class="card" id="think-card" hidden>
           <h2>Think recursively</h2>
           <p>You don't need to memorise a sequence of moves. Just ask: <em>where does the biggest disk need to go?</em></p>
           <ol class="think">
-            <li>To put the biggest disk on <b>C</b>, every smaller disk must first be out of the way, stacked on the spare peg <b>B</b>.</li>
+            <li>To put the biggest disk on <b>C</b>, every smaller disk must first be out of the way, stacked on the auxiliary peg <b>B</b>.</li>
             <li>Getting all those smaller disks onto <b>B</b> is <em>the same puzzle with one disk fewer</em>. Solve it the same way.</li>
             <li>Move the biggest disk to <b>C</b>, then solve the smaller puzzle once more, from <b>B</b> to <b>C</b>.</li>
           </ol>
@@ -146,8 +151,8 @@
           <span class="lg todo">not called yet</span>
         </div>
       </div>
-      <p class="muted small tree-help">Each box is one call to <code>hanoi()</code>, showing its <i>n</i> and where it moves disks (from → to). Every call makes exactly <b>one</b> move of its own (step 2), so reading the tree left to right gives the order of the moves: the numbers along the bottom. Click a box to jump to its move.</p>
-      <div id="tree-wrap" class="tree-wrap"><svg id="tree" role="img" aria-label="Recursion tree of hanoi calls"></svg></div>
+      <p class="muted small tree-help">Each box is one call to <code>solve()</code>, showing its <i>n</i> and where it moves disks (source → destination). The <code>solve(0)</code> calls are left out because they do nothing. Every other call makes exactly <b>one</b> move of its own (step 2), so reading the tree left to right gives the order of the moves: the numbers along the bottom. Click a box to jump to its move.</p>
+      <div id="tree-wrap" class="tree-wrap"><svg id="tree" role="img" aria-label="Recursion tree of solve calls"></svg></div>
     </section>
 
     <section class="card formula" id="formula">
@@ -163,7 +168,7 @@
           </ol>
           <p>Let <i>T</i>(<i>n</i>) be the number of moves for <i>n</i> disks. Adding up the three phases:</p>
           <div class="eq">T(n) = T(n−1) + 1 + T(n−1) = <b>2·T(n−1) + 1</b></div>
-          <p class="muted small">with T(1) = 1: one disk takes one move. The "formula, live" bar under the board shows these three parts filling up as the animation runs.</p>
+          <p class="muted small">with T(0) = 0 (no disks, no moves, the <code>n === 0</code> base case), which gives T(1) = 2·0 + 1 = 1. The "formula, live" bar under the board shows these three parts filling up as the animation runs.</p>
         </article>
 
         <article>
