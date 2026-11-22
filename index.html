@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tower of Hanoi · Recursion Visualizer</title>
+  <meta name="description" content="Step through the recursive Tower of Hanoi algorithm line by line, watch the call stack and recursion tree, play the puzzle yourself, and see why it takes 2^n − 1 moves.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='26' width='28' height='4' rx='2' fill='%23a47551'/%3E%3Crect x='14.5' y='5' width='3' height='22' rx='1.5' fill='%237b5235'/%3E%3Crect x='5' y='20' width='22' height='5' rx='2.5' fill='%234f46e5'/%3E%3Crect x='8' y='14' width='16' height='5' rx='2.5' fill='%2312b886'/%3E%3Crect x='11' y='8' width='10' height='5' rx='2.5' fill='%23f59f00'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>Tower of Hanoi <span class="sub">see the recursion</span></h1>
+      <p class="lede">Goal: move the whole tower from peg <b>A</b> to peg <b>C</b>. Move one disk at a time, and never put a bigger disk on a smaller one. Watch the recursive algorithm solve it line by line, or try it yourself. The math is <a href="#formula">further down</a>.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="toolbar">
+      <div class="tabs" role="tablist" aria-label="Mode">
+        <button class="tab" role="tab" id="tab-watch" aria-selected="true">Watch the recursion</button>
+        <button class="tab" role="tab" id="tab-play" aria-selected="false">Play it yourself</button>
+      </div>
+      <div class="disks-ctl" role="group" aria-label="Number of disks">
+        <span class="lbl">Disks</span>
+        <button class="icon-btn" id="n-minus" aria-label="Fewer disks">−</button>
+        <output id="n-out" aria-live="polite">3</output>
+        <button class="icon-btn" id="n-plus" aria-label="More disks">+</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="main-col">
+        <section class="card stage-card">
+          <div id="stage" class="stage" aria-label="Tower of Hanoi board">
+            <div class="zone" data-peg="0"></div>
+            <div class="zone" data-peg="1"></div>
+            <div class="zone" data-peg="2"></div>
+            <div class="peg" data-peg="0"></div>
+            <div class="peg" data-peg="1"></div>
+            <div class="peg" data-peg="2"></div>
+            <div class="base"></div>
+          </div>
+          <div class="peg-labels">
+            <div class="peg-label" data-peg="0"><span class="name">A</span><span class="role"></span></div>
+            <div class="peg-label" data-peg="1"><span class="name">B</span><span class="role"></span></div>
+            <div class="peg-label" data-peg="2"><span class="name">C</span><span class="role"></span></div>
+          </div>
+          <p id="narration" class="narration" aria-live="polite"></p>
+          <p id="stage-note" class="stage-note">The labels under the pegs show the <em>current call's</em> roles: <b class="c-from">from</b>, <b class="c-to">to</b> and <b class="c-via">spare</b>. They swap around in every recursive call. Faded disks are bigger than the current call's <i>n</i>: that call never touches them, so they act like part of the floor.</p>
+        </section>
+
+        <section id="watch-controls" class="card controls">
+          <div class="transport">
+            <button id="btn-start" class="btn" title="Back to the start (Home)" aria-label="Back to start">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 6h2.2v12H6zM18 6v12L9.5 12z"/></svg>
+            </button>
+            <button id="btn-back" class="btn" title="Step back (←)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M14.5 6l-6 6 6 6"/></svg><span>Back</span>
+            </button>
+            <button id="btn-play" class="btn primary" title="Play / pause (Space)" aria-label="Play">
+              <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13l10.5-6.5z"/></svg>
+              <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 5.5h3.5v13H7zM13.5 5.5H17v13h-3.5z"/></svg>
+              <span class="txt">Play</span>
+            </button>
+            <button id="btn-next" class="btn" title="Step forward (→)">
+              <span>Next</span><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M9.5 6l6 6-6 6"/></svg>
+            </button>
+            <button id="btn-end" class="btn" title="Jump to the end (End)" aria-label="Jump to end">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.8 6H18v12h-2.2zM6 6v12l8.5-6z"/></svg>
+            </button>
+          </div>
+
+          <input id="scrub" class="range" type="range" min="0" max="0" value="0" aria-label="Timeline">
+          <div class="progress"><span id="prog-step"></span><span id="prog-move"></span></div>
+
+          <div class="tally">
+            <div class="tally-head"><span class="lbl">The formula, live</span><span id="tally-eq" class="mono"></span></div>
+            <div class="tally-bar">
+              <div class="tp" id="tp1"><div class="fill"></div><span class="tl"></span></div>
+              <div class="tp mid" id="tp2"><div class="fill"></div><span class="tl"></span></div>
+              <div class="tp" id="tp3"><div class="fill"></div><span class="tl"></span></div>
+            </div>
+          </div>
+
+          <div class="opts">
+            <div class="seg" role="radiogroup" aria-label="Step size">
+              <span class="lbl">Step by</span>
+              <button role="radio" aria-checked="true" data-by="line">line of code</button>
+              <button role="radio" aria-checked="false" data-by="move">disk move</button>
+            </div>
+            <label class="speed"><span class="lbl">Speed</span><input id="speed" class="range" type="range" min="1" max="10" value="3"></label>
+          </div>
+          <p class="tip">Keys: <kbd>Space</kbd> play/pause, <kbd>←</kbd> <kbd>→</kbd> step, <kbd>Home</kbd> <kbd>End</kbd> jump.</p>
+        </section>
+
+        <section id="play-controls" class="card controls" hidden>
+          <div class="stats">
+            <div class="stat"><span class="k">Your moves</span><span class="v" id="st-moves">0</span></div>
+            <div class="stat"><span class="k">Minimum (2<sup>n</sup> − 1)</span><span class="v" id="st-min">7</span></div>
+            <div class="stat"><span class="k">Best from here</span><span class="v" id="st-left">7</span></div>
+          </div>
+          <div class="transport">
+            <button id="btn-undo" class="btn">Undo</button>
+            <button id="btn-hint" class="btn primary">Hint</button>
+            <button id="btn-restart" class="btn">Restart</button>
+          </div>
+          <p class="tip">Click a peg to pick up its top disk, then click another peg to drop it. You can also drag disks. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> pick up / drop, <kbd>U</kbd> undo, <kbd>H</kbd> hint, <kbd>Esc</kbd> put back.</p>
+        </section>
+      </div>
+
+      <div class="side-col">
+        <section class="card" id="code-card">
+          <div class="card-head"><h2>The code</h2><span id="frame-info" class="pill"></span></div>
+          <div id="code" class="code"></div>
+          <div id="call-detail" class="call-detail"></div>
+        </section>
+
+        <section class="card" id="stack-card">
+          <div class="card-head"><h2>Call stack</h2><span class="muted small">top = running now</span></div>
+          <ol id="stack" class="stack"></ol>
+        </section>
+
+        <section class="card" id="think-card" hidden>
+          <h2>Think recursively</h2>
+          <p>You don't need to memorise a sequence of moves. Just ask: <em>where does the biggest disk need to go?</em></p>
+          <ol class="think">
+            <li>To put the biggest disk on <b>C</b>, every smaller disk must first be out of the way, stacked on the spare peg <b>B</b>.</li>
+            <li>Getting all those smaller disks onto <b>B</b> is <em>the same puzzle with one disk fewer</em>. Solve it the same way.</li>
+            <li>Move the biggest disk to <b>C</b>, then solve the smaller puzzle once more, from <b>B</b> to <b>C</b>.</li>
+          </ol>
+          <p class="muted small">Pattern to notice: the smallest disk moves on every other turn, always cycling the same way (A→C→B→A when the number of disks is odd, A→B→C→A when it's even).</p>
+          <p class="muted small">Stuck? Press <b>Hint</b>. It explains the next move using exactly this reasoning.</p>
+        </section>
+      </div>
+    </div>
+
+    <section class="card" id="tree-card">
+      <div class="card-head">
+        <h2>Recursion tree</h2>
+        <div class="legend">
+          <span class="lg cur">running</span>
+          <span class="lg wait">waiting on the stack</span>
+          <span class="lg done">finished</span>
+          <span class="lg todo">not called yet</span>
+        </div>
+      </div>
+      <p class="muted small tree-help">Each box is one call to <code>hanoi()</code>, showing its <i>n</i> and where it moves disks (from → to). Every call makes exactly <b>one</b> move of its own (step 2), so reading the tree left to right gives the order of the moves: the numbers along the bottom. Click a box to jump to its move.</p>
+      <div id="tree-wrap" class="tree-wrap"><svg id="tree" role="img" aria-label="Recursion tree of hanoi calls"></svg></div>
+    </section>
+
+    <section class="card formula" id="formula">
+      <h2 class="big">Why it takes 2<sup>n</sup> − 1 moves</h2>
+      <div class="f-grid">
+        <article>
+          <h3><span class="num">1</span>Split the problem</h3>
+          <p>The biggest disk can only move when every other disk is off it <em>and</em> off its destination. That forces three phases:</p>
+          <ol class="phases">
+            <li><b>Step 1:</b> move the top <i>n</i> − 1 disks A → B. <span class="muted">The same puzzle, one disk smaller.</span></li>
+            <li><b>Step 2:</b> move the biggest disk A → C. <span class="muted">Exactly 1 move.</span></li>
+            <li><b>Step 3:</b> move the <i>n</i> − 1 disks B → C. <span class="muted">The same smaller puzzle again.</span></li>
+          </ol>
+          <p>Let <i>T</i>(<i>n</i>) be the number of moves for <i>n</i> disks. Adding up the three phases:</p>
+          <div class="eq">T(n) = T(n−1) + 1 + T(n−1) = <b>2·T(n−1) + 1</b></div>
+          <p class="muted small">with T(1) = 1: one disk takes one move. The "formula, live" bar under the board shows these three parts filling up as the animation runs.</p>
+        </article>
+
+        <article>
+          <h3><span class="num">2</span>Unroll the recurrence</h3>
+          <p>Keep substituting T(k) = 2·T(k−1) + 1 until you reach T(1). For <i>n</i> = <span class="nval">3</span>:</p>
+          <div id="unroll" class="unroll"></div>
+          <p>Each substitution doubles everything and adds the next power of two. You end up with 1 + 2 + 4 + ⋯ + 2<sup>n−1</sup>, and a sum of powers of two is always one less than the next power: <b>2<sup>n</sup> − 1</b>.</p>
+        </article>
+
+        <article>
+          <h3><span class="num">3</span>Count it another way</h3>
+          <p>The biggest disk moves once. The next one moves twice (once in each half). The next one four times… In general disk <i>k</i> moves 2<sup>n−k</sup> times. These counts fill up as you watch:</p>
+          <div id="disk-counts" class="disk-counts"></div>
+          <div class="eq" id="disk-sum"></div>
+        </article>
+
+        <article>
+          <h3><span class="num">4</span>Prove it, and prove it's the best</h3>
+          <p><b>Induction.</b> Base: T(1) = 1 = 2<sup>1</sup> − 1. Step: if T(n−1) = 2<sup>n−1</sup> − 1, then T(n) = 2(2<sup>n−1</sup> − 1) + 1 = 2<sup>n</sup> − 2 + 1 = 2<sup>n</sup> − 1. ✓</p>
+          <p><b>No solution can be shorter.</b> Before the biggest disk moves for the first time, the other <i>n</i> − 1 disks must all be stacked on the third peg: at least T(n−1) moves. The biggest disk moves at least once. After its last move, the <i>n</i> − 1 disks must all be stacked back on top of it: at least T(n−1) more. So every solution needs at least 2·T(n−1) + 1 moves, which is exactly what the recursion uses.</p>
+        </article>
+
+        <article class="wide">
+          <h3><span class="num">5</span>Exponential growth</h3>
+          <p>Each extra disk doubles the work (plus one). Here's how long it takes at one move per second:</p>
+          <div class="table-wrap">
+            <table id="growth">
+              <thead><tr><th>Disks</th><th>Minimum moves (2<sup>n</sup> − 1)</th><th>At 1 move per second</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted small">The legend says priests are moving a tower of 64 golden disks, and the world ends when they finish. At one move per second that's about 585 billion years, more than 40 times the age of the universe.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">Plain HTML, CSS and JavaScript. No libraries, no build step. Source: <a href="https://github.com/lumbanon/tower_of_hanoi_simulation">github.com/lumbanon/tower_of_hanoi_simulation</a></div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
